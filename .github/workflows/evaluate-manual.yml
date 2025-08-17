@@ -10,7 +10,7 @@ on:
       text_col:
         description: "Text column name"
         required: true
-        default: "review_text"
+        default: "text"
       label_col:
         description: "Label column name"
         required: true
