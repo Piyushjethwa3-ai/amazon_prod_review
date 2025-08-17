@@ -1,69 +1,31 @@
-name: evaluate-and-commit
+name: Evaluate and Commit
 
 on:
   workflow_dispatch:
-    inputs:
-      data_csv:
-        description: "Path to labeled CSV"
-        required: true
-        default: "data/amazon_balanced_test.csv"
-      text_col:
-        description: "Text column name"
-        required: true
-        default: "text"
-      label_col:
-        description: "Label column name"
-        required: true
-        default: "sentiment"
-      model_path:
-        description: "Model pickle path"
-        required: true
-        default: "models/logistic_model.pkl"
-      vectorizer_path:
-        description: "Vectorizer pickle path (if model not a Pipeline)"
-        required: true
-        default: "models/tfidf_vectorizer.pkl"
 
 jobs:
-  evaluate_commit:
+  evaluate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # allow pushing changes
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          persist-credentials: true
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+        run: pip install -r requirements.txt
 
       - name: Run evaluation
         run: |
           mkdir -p reports
           python scripts/evaluate_existing_model.py \
-            --model-path "${{ github.event.inputs.model_path }}" \
-            --vectorizer-path "${{ github.event.inputs.vectorizer_path }}" \
-            --data-csv "${{ github.event.inputs.data_csv }}" \
-            --text-col "${{ github.event.inputs.text_col }}" \
-            --label-col "${{ github.event.inputs.label_col }}" \
-            --metrics-out reports/metrics_existing.json \
-            --cm-out reports/confusion_matrix_existing.png
-
-      - name: (Optional) Batch predictions
-        run: |
-          python scripts/predict_existing_model.py \
-            --model-path "${{ github.event.inputs.model_path }}" \
-            --vectorizer-path "${{ github.event.inputs.vectorizer_path }}" \
-            --input-csv "${{ github.event.inputs.data_csv }}" \
-            --text-col "${{ github.event.inputs.text_col }}" \
-            --output-csv reports/predictions.csv
+            --data_csv data/amazon_balanced_test.csv \
+            --text_col text \
+            --label_col sentiment \
+            --model_path models/logistic_model.pkl \
+            --vectorizer_path models/tfidf_vectorizer.pkl
 
       - name: Commit and push results
         run: |
