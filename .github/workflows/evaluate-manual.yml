@@ -1,41 +1,84 @@
-name: Evaluate and Commit
-on: { workflow_dispatch: {} }
+name: Evaluate (Artifact + Commit)
+
+on:
+  workflow_dispatch:
+    inputs:
+      data_csv:
+        description: "Path to labeled CSV"
+        required: false
+        default: "data/amazon_balanced_test.csv"
+      text_col:
+        description: "Text column name"
+        required: false
+        default: "text"
+      label_col:
+        description: "Label column name"
+        required: false
+        default: "sentiment"
+      model_path:
+        description: "Model pickle path"
+        required: false
+        default: "models/logistic_model.pkl"
+      vectorizer_path:
+        description: "Vectorizer pickle path (if model not a Pipeline)"
+        required: false
+        default: "models/tfidf_vectorizer.pkl"
 
 jobs:
   evaluate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write   # allow committing the reports folder
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            **/requirements.txt
+            **/pyproject.toml
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; else echo "requirements.txt not found"; fi
 
       - name: Run evaluation (writes to reports/)
         env:
-          # Optional overrides if your CSV headers differ:
-          # EVAL_DATA_CSV: data/amazon_balanced_test.csv
-          # EVAL_TEXT_COL: text
-          # EVAL_LABEL_COL: sentiment
-          # EVAL_MODEL_PATH: models/logistic_model.pkl
-          # EVAL_VECTORIZER_PATH: models/tfidf_vectorizer.pkl
+          # Let the script auto-detect columns; override via inputs if needed:
+          EVAL_DATA_CSV: ${{ github.event.inputs.data_csv }}
+          EVAL_TEXT_COL: ${{ github.event.inputs.text_col }}
+          EVAL_LABEL_COL: ${{ github.event.inputs.label_col }}
+          EVAL_MODEL_PATH: ${{ github.event.inputs.model_path }}
+          EVAL_VECTORIZER_PATH: ${{ github.event.inputs.vectorizer_path }}
         run: |
+          mkdir -p reports
           python scripts/evaluate_existing_model.py
           echo "Listing reports/"
           ls -la reports || true
+
+      - name: Upload reports as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results
+          path: |
+            reports/metrics_existing.json
+            reports/confusion_matrix_existing.png
+            reports/predictions.csv
+          if-no-files-found: error
 
       - name: Commit and push results
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports/* || true
+          git add -f reports/* || true   # force add in case of .gitignore
           git commit -m "ci: add evaluation metrics, confusion matrix and predictions" || echo "No changes to commit"
           git push
