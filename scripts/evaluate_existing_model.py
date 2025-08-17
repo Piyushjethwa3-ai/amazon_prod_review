@@ -1,70 +1,75 @@
-import os
-import json
+#!/usr/bin/env python3
+from __future__ import annotations
+import os, json
+from pathlib import Path
 import joblib
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-import seaborn as sns
+
+# Defaults (override via env if you ever need to)
+DATA_CSV = os.getenv("EVAL_DATA_CSV", "data/amazon_balanced_test.csv")
+TEXT_COL = os.getenv("EVAL_TEXT_COL", "text")
+LABEL_COL = os.getenv("EVAL_LABEL_COL", "sentiment")
+MODEL_PATH = os.getenv("EVAL_MODEL_PATH", "models/logistic_model.pkl")
+VECTORIZER_PATH = os.getenv("EVAL_VECTORIZER_PATH", "models/tfidf_vectorizer.pkl")
+
+REPORTS = Path("reports")
+METRICS_OUT = REPORTS / "metrics_existing.json"
+CM_OUT = REPORTS / "confusion_matrix_existing.png"
+PRED_OUT = REPORTS / "predictions.csv"
 
 def main():
-    # Ensure reports folder exists
-    reports_dir = "reports"
-    os.makedirs(reports_dir, exist_ok=True)
-
-    # Paths (hard-coded defaults, adjust if needed)
-    data_csv = os.environ.get("EVAL_DATA_CSV", "data/amazon_balanced_test.csv")
-    text_col = os.environ.get("EVAL_TEXT_COL", "text")
-    label_col = os.environ.get("EVAL_LABEL_COL", "sentiment")
-    model_path = os.environ.get("EVAL_MODEL_PATH", "models/logistic_model.pkl")
-    vectorizer_path = os.environ.get("EVAL_VECTORIZER_PATH", "models/tfidf_vectorizer.pkl")
+    REPORTS.mkdir(parents=True, exist_ok=True)
 
     # Load data
-    df = pd.read_csv(data_csv)
-    if text_col not in df.columns or label_col not in df.columns:
-        raise ValueError(f"Missing required columns in dataset. Found: {list(df.columns)}")
+    df = pd.read_csv(DATA_CSV)
+    if TEXT_COL not in df.columns or LABEL_COL not in df.columns:
+        raise ValueError(f"Missing required columns: need '{TEXT_COL}' and '{LABEL_COL}'. Found: {list(df.columns)}")
+    X = df[TEXT_COL].astype(str)
+    y = df[LABEL_COL].astype(str)
 
-    X_test = df[text_col].astype(str)
-    y_test = df[label_col]
-
-    # Load model and vectorizer
-    model = joblib.load(model_path)
-
+    # Load model (pipeline or estimator)
+    model = joblib.load(MODEL_PATH)
     try:
-        # If model is a pipeline
-        y_pred = model.predict(X_test)
+        y_pred = model.predict(X)  # pipeline case
     except Exception:
-        # If vectorizer is separate
-        vectorizer = joblib.load(vectorizer_path)
-        X_vec = vectorizer.transform(X_test)
-        y_pred = model.predict(X_vec)
+        vec = joblib.load(VECTORIZER_PATH)  # estimator+vectorizer case
+        Xv = vec.transform(X)
+        y_pred = model.predict(Xv)
 
-    # Compute metrics
-    acc = accuracy_score(y_test, y_pred)
-    report = classification_report(y_test, y_pred, output_dict=True)
+    # Metrics
+    acc = float(accuracy_score(y, y_pred))
+    report = classification_report(y, y_pred, output_dict=True)
+    with open(METRICS_OUT, "w") as f:
+        json.dump({"accuracy": acc, "report": report}, f, indent=2)
 
-    # Save metrics.json
-    metrics_path = os.path.join(reports_dir, "metrics_existing.json")
-    with open(metrics_path, "w") as f:
-        json.dump({"accuracy": acc, "report": report}, f, indent=4)
-    print(f"[INFO] Saved metrics to {metrics_path}")
+    # Predictions CSV
+    pd.DataFrame({TEXT_COL: X, "true": y, "pred": y_pred}).to_csv(PRED_OUT, index=False)
 
-    # Save predictions.csv
-    preds_path = os.path.join(reports_dir, "predictions.csv")
-    pd.DataFrame({"text": X_test, "true": y_test, "pred": y_pred}).to_csv(preds_path, index=False)
-    print(f"[INFO] Saved predictions to {preds_path}")
+    # Confusion matrix (pure matplotlib, no seaborn)
+    labels = sorted(df[LABEL_COL].astype(str).unique())
+    cm = confusion_matrix(y, y_pred, labels=labels)
+    fig, ax = plt.subplots()
+    im = ax.imshow(cm)  # default colormap; no explicit colors
+    ax.set_title("Confusion Matrix (Existing Model)")
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("True")
+    ax.set_xticks(range(len(labels)))
+    ax.set_yticks(range(len(labels)))
+    ax.set_xticklabels(labels, rotation=45, ha="right")
+    ax.set_yticklabels(labels)
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, str(cm[i, j]), ha="center", va="center")
+    fig.colorbar(im)
+    plt.tight_layout()
+    plt.savefig(CM_OUT, dpi=160)
 
-    # Save confusion_matrix.png
-    cm = confusion_matrix(y_test, y_pred, labels=sorted(df[label_col].unique()))
-    plt.figure(figsize=(6, 5))
-    sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                xticklabels=sorted(df[label_col].unique()),
-                yticklabels=sorted(df[label_col].unique()))
-    plt.xlabel("Predicted")
-    plt.ylabel("True")
-    cm_path = os.path.join(reports_dir, "confusion_matrix_existing.png")
-    plt.savefig(cm_path)
-    plt.close()
-    print(f"[INFO] Saved confusion matrix to {cm_path}")
+    print(f"SAVED: {METRICS_OUT}")
+    print(f"SAVED: {PRED_OUT}")
+    print(f"SAVED: {CM_OUT}")
+    print(f"ACCURACY: {acc:.4f}")
 
 if __name__ == "__main__":
     main()
