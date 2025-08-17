@@ -1,4 +1,4 @@
-name: Evaluate and Commit
+name: Evaluate (Manual, Artifact)
 
 on:
   workflow_dispatch: {}
@@ -6,27 +6,15 @@ on:
 jobs:
   evaluate:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write   # <-- allows committing back to the repo
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: true
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
+      - run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-
-      - name: Run evaluation (generates files under reports/)
-        run: |
+      - run: |
           mkdir -p reports
           python scripts/evaluate_existing_model.py \
             --model-path models/logistic_model.pkl \
@@ -36,23 +24,18 @@ jobs:
             --label-col sentiment \
             --metrics-out reports/metrics_existing.json \
             --cm-out reports/confusion_matrix_existing.png
-          # Optional: batch predictions too
           python scripts/predict_existing_model.py \
             --model-path models/logistic_model.pkl \
             --vectorizer-path models/tfidf_vectorizer.pkl \
             --input-csv data/amazon_balanced_test.csv \
             --text-col text \
             --output-csv reports/predictions.csv
-
-      - name: Show what was produced (debug)
-        run: |
-          echo "Listing reports/"
-          ls -la reports || true
-
-      - name: Commit and push results
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports/* || true
-          git commit -m "ci: add evaluation metrics, confusion matrix and predictions" || echo "No changes to commit"
-          git push
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation-results
+          path: |
+            reports/metrics_existing.json
+            reports/confusion_matrix_existing.png
+            reports/predictions.csv
+          if-no-files-found: error
