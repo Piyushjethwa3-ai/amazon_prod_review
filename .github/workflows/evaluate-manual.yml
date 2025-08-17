@@ -1,17 +1,19 @@
 name: Evaluate Model
 
 on:
-  workflow_dispatch:   # allows manual trigger from Actions tab
+  workflow_dispatch:   # run from the Actions tab
 
 jobs:
   evaluate:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # required so the workflow can push reports to your repo
+      contents: write   # required so we can push the reports folder
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,18 +25,18 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run evaluation
+      - name: Run evaluation (writes to reports/)
         run: |
           mkdir -p reports
           python scripts/evaluate_existing_model.py
-          echo "Reports generated:"
-          ls -la reports || true
+          echo "Reports generated:" && ls -la reports || true
 
       - name: Upload reports as artifact
         uses: actions/upload-artifact@v4
         with:
           name: evaluation-results
           path: reports/
+          if-no-files-found: error
 
       - name: Commit reports to repo
         run: |
