@@ -1,4 +1,4 @@
-name: evaluate-manual
+name: evaluate-and-commit
 
 on:
   workflow_dispatch:
@@ -25,10 +25,15 @@ on:
         default: "models/tfidf_vectorizer.pkl"
 
 jobs:
-  evaluate:
+  evaluate_commit:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # allow pushing changes
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - uses: actions/setup-python@v5
         with:
@@ -60,12 +65,10 @@ jobs:
             --text-col "${{ github.event.inputs.text_col }}" \
             --output-csv reports/predictions.csv
 
-      - name: Upload results
-        uses: actions/upload-artifact@v4
-        with:
-          name: evaluation-results
-          path: |
-            reports/metrics_existing.json
-            reports/confusion_matrix_existing.png
-            reports/predictions.csv
-          if-no-files-found: warn
+      - name: Commit and push results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/*
+          git commit -m "ci: add evaluation metrics, confusion matrix and predictions" || echo "No changes to commit"
+          git push
