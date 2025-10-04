@@ -22,10 +22,23 @@ PRED_OUT = REPORTS / "predictions.csv"
 def main():
     REPORTS.mkdir(parents=True, exist_ok=True)
 
-    # Load data
-    df = pd.read_csv(DATA_CSV)
+    # --- Robust CSV read ---
+    print(f"[INFO] Reading dataset from {DATA_CSV}")
+    try:
+        df = pd.read_csv(DATA_CSV, quotechar='"')
+    except Exception as e:
+        print(f"[WARN] Default read_csv failed: {e}")
+        print("[WARN] Retrying with on_bad_lines='skip'")
+        df = pd.read_csv(DATA_CSV, quotechar='"', on_bad_lines="skip")
+
+    # Log dataset preview in CI logs
+    print("[INFO] First 3 rows of dataset:")
+    print(df.head(3).to_string())
+    print("[INFO] Columns detected:", list(df.columns))
+
     if TEXT_COL not in df.columns or LABEL_COL not in df.columns:
         raise ValueError(f"Missing required columns: need '{TEXT_COL}' and '{LABEL_COL}'. Found: {list(df.columns)}")
+
     X = df[TEXT_COL].astype(str)
     y = df[LABEL_COL].astype(str)
 
