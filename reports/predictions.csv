@@ -2,3 +2,11 @@ text,true,pred
 Worst purchase ever. Totally useless.,negative,negative
 "Average performance, nothing special.",neutral,positive
 Loved it! Exceeded my expectations.,positive,positive
+"Terrible product, broke after one use.",negative,negative
+"Not worth the price, very disappointing.",negative,positive
+Customer service was unhelpful and rude.,negative,positive
+"Works okay, nothing too special.",neutral,positive
+"It's average, neither good nor bad.",neutral,positive
+Fantastic quality! Highly recommend.,positive,positive
+"Very satisfied, will buy again.",positive,positive
+"Great value for the money, exceeded expectations.",positive,neutral
